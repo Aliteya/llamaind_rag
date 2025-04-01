@@ -1,0 +1,4 @@
+pydantic_settings
+google-auth
+google-api-python-client
+pandas
