@@ -5,6 +5,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import pandas as pd
+import os
 
 class GoogleSheetsWrapper():
     def __init__(self):
@@ -12,9 +13,11 @@ class GoogleSheetsWrapper():
         self.service = None
 
     def get_google_sheets_service(self):
+        logger.debug("get_google_sheets_service")
+        auth_tokens = settings.get_auth_tokens()
         credentials = service_account.Credentials.from_service_account_file(
-            settings.get_auth_tokens[0],
-            scopes=settings.get_auth_tokens[1]
+            auth_tokens[0],
+            scopes=auth_tokens[1]
         )
         self.service = build('sheets', 'v4', credentials=credentials)
 
@@ -67,6 +70,3 @@ def load_questions(file_path: str) -> list:
     dataframe = pd.read_excel(file_path)
     questions = dataframe.iloc[:, 0].dropna().tolist()
     return questions
-
-
-
