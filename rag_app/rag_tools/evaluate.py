@@ -37,14 +37,15 @@ def evaluate_responses(responses: list, ground_truth: list) -> list:
 
 def prepare_data(scores: list, responses: list) -> list:
     rows = [["Question", "Answer", "Retrieved Chunks", "Factual Correctness", "Noise Sensitivity"]]
-
+    factual_correctness = scores.get('factual_correctness(mode=f1)', "N/A")
+    noise_sensitivity = scores.get('noise_sensitivity(mode=relevant)', "N/A")
     for i in range(len(responses)):
         chunks_str = "\n".join(responses[i]["retrieved_chunks"])
         rows.append([
             responses[i]["question"],
             responses[i]["answer"],
-            chunks_str,     
+            chunks_str,    
+            str(factual_correctness), 
+            str(noise_sensitivity) 
         ])
-    rows.append([str(scores['factual_correctness']), 
-            str(scores['noise_sensitivity'])])
     return rows

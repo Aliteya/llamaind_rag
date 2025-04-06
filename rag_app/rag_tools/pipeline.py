@@ -42,17 +42,21 @@ def load_json_db(file_path: str):
     return documents
 
 def create_ingestion_pipeline():
-   
     pipeline = IngestionPipeline(
-        transformations=[]
-        )
+        transformations=[
+            OpenAIEmbedding(
+                model="text-embedding-3-small",
+                api_key=settings.get_llm_key()
+            )
+        ]
+    )
     return pipeline
 
 def setup_rag_pipeline(nodes):
     Settings.llm = OpenAI(
         model="gpt-4o-mini", 
         api_key=settings.get_llm_key(), 
-        temperature=0.6
+        temperature=0.5
     )
     
     Settings.embed_model = OpenAIEmbedding(
@@ -61,21 +65,36 @@ def setup_rag_pipeline(nodes):
     )
 
     index = VectorStoreIndex(nodes)
-    query_engine = index.as_query_engine(text_qa_template=qa_prompt, similarity_top_k=5, response_mode="compact")
+    query_engine = index.as_query_engine(text_qa_template=qa_prompt, similarity_top_k=7, response_mode="compact")
     return query_engine
 
-async def data_process(documents, pipeline: IngestionPipeline, num_workers=5):
-    nodes = [
-        TextNode(
-            text=doc.text,
-            metadata=doc.metadata
-        ) 
-        for doc in documents
-    ]
-    logger.info(f"Сгенерировано узлов (nodes): {len(nodes)}")
-    if not nodes:
-        raise ValueError("Не удалось создать узлы. Проверьте пайплайн обработки.")
-    return nodes
+
+async def data_process(documents, pipeline: IngestionPipeline):
+    logger.info(f"Начинаем обработку документов. Количество документов: {len(documents)}")
+    
+    if not documents:
+        raise ValueError("Список документов пуст. Проверьте загрузку данных.")
+    
+    try:
+        processed_nodes = await pipeline.arun(documents=documents, num_workers=5)
+        logger.info(f"Обработано узлов: {len(processed_nodes)}")
+        return processed_nodes
+    except Exception as e:
+        logger.error(f"Ошибка при обработке документов: {e}")
+        raise
+
+# async def data_process(documents, pipeline: IngestionPipeline, num_workers=5):
+#     nodes = [
+#         TextNode(
+#             text=doc.text,
+#             metadata=doc.metadata
+#         ) 
+#         for doc in documents
+#     ]
+#     logger.info(f"Сгенерировано узлов (nodes): {len(nodes)}")
+#     if not nodes:
+#         raise ValueError("Не удалось создать узлы. Проверьте пайплайн обработки.")
+#     return nodes
 
 async def process_questions(query_engine, questions: list) -> list:
     async def process_question(question):
