@@ -2,6 +2,9 @@ pydantic_settings
 google-auth
 google-api-python-client
 pandas
+langchain
 llama-index
 ragas
 openpyxl
+qdrant-client
+llama-index-vector-stores-qdrant

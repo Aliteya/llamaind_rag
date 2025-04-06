@@ -69,4 +69,5 @@ class GoogleSheetsWrapper():
 def load_questions(file_path: str) -> list:
     dataframe = pd.read_excel(file_path)
     questions = dataframe.iloc[:, 0].dropna().tolist()
-    return questions
+    ground_truth = dataframe.iloc[:, 1].dropna().tolist()
+    return questions, ground_truth

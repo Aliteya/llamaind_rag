@@ -2,21 +2,22 @@ from .exel_tools import *
 from .rag_tools import *
 from .logging import logger
 
-if __name__ == '__main__':
-    questions = load_questions("questions.xlsx")
+import asyncio
 
-    query_engine = initialize_rag_pipeline("rag_app/data")
+async def main():
+    questions, ground_truth = load_questions("questions.xlsx")
+    
+    vector_store = setup_qdrant("cache/embedding", "rag_cache")
+    documents = load_json_db("rag_app/data/db.json")
+    pipeline = create_ingestion_pipeline()
 
-    responses = proccess_questions(query_engine, questions)
-    i = 0
-    for response in responses:
-        i+=1
-        print(i)
-        # print(response)
-        # print(f"Question: {response['question']}")
-        # print(f"Answer: {response['answer']}")
-        # print(f"Retrieved chunks: {response['retrieved_chunks']}")
-        # print("-" * 20)
+    nodes = await data_process(documents=documents, pipeline=pipeline)
+
+    query_engine = setup_rag_pipeline(nodes, vector_store)
+
+    responses = await proccess_questions(query_engine, questions)
+
+    # evaluated_responses = evaluate_responses(responses, ground_truth)
     
     data = prepare_data(responses)
 
@@ -31,3 +32,7 @@ if __name__ == '__main__':
         sheets_wrapper.write_to_table(sheet_name, data)
     except Exception as e:
         logger.error(f"An error occurred while writing to Google Sheets: {e}")
+
+
+if __name__ == '__main__':
+    asyncio.run(main())
