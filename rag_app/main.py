@@ -15,11 +15,11 @@ async def main():
 
     query_engine = setup_rag_pipeline(nodes)
 
-    responses = await proccess_questions(query_engine, questions)
+    responses = await process_questions(query_engine, questions)
 
-    # evaluated_responses = evaluate_responses(responses, ground_truth)
+    evaluated_responses = evaluate_responses(responses, ground_truth)
     
-    data = prepare_data(responses)
+    data = prepare_data(scores=evaluated_responses, responses=responses)
 
     try:
         sheets_wrapper = GoogleSheetsWrapper()
