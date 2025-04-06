@@ -1,6 +1,8 @@
 from ..core import settings
+from ..logging import logger
 
 from llama_index.core import VectorStoreIndex, SimpleDirectoryReader, Document, PromptTemplate
+from llama_index.core.schema import TextNode
 from llama_index.core.settings import Settings
 from llama_index.core.ingestion import IngestionPipeline
 from llama_index.core.node_parser import SentenceSplitter
@@ -13,21 +15,21 @@ import json
 import asyncio
 
 qa_prompt = PromptTemplate(
-    "Отвечай ТОЛЬКО на английском языке и ТОЛЬКО используя предоставленные данные.\n"
-    "Формат ответа:\n"
-    "1. [пункт]\n"
-    "   - [Детализация пунктов]\n"
-    "2. [Следующий пункт]\n"
-    "Используй только данные из этих разделов:\n{context_str}\n\n"
-    "Вопрос: {query_str}\n"
-    "Ответ:"
+    "Answer ONLY in English and ONLY using the data provided.\n"
+    "Answer format:\n"
+    "1. [item]\n"
+    " - [Item details]\n"
+    "2. [Next item]\n"
+    "Use only data from these sections:\n{context_str}\n\n"
+    "Question: {query_str}\n"
+    "Answer:"
 )
 
-def setup_qdrant(cache_dir: str, collection_name: str):
-    os.makedirs(cache_dir, exist_ok=True)
-    client = qdrant_client.QdrantClient(path=cache_dir)
-    vector_store = QdrantVectorStore(client=client, collection_name=collection_name)
-    return vector_store
+# def setup_qdrant(cache_dir: str, collection_name: str):
+#     os.makedirs(cache_dir, exist_ok=True)
+#     client = qdrant_client.QdrantClient(path=cache_dir)
+#     vector_store = QdrantVectorStore(client=client, collection_name=collection_name)
+#     return vector_store
 
 def load_json_db(file_path: str):
     with open(file_path, "r", encoding="utf-8") as file:
@@ -37,10 +39,16 @@ def load_json_db(file_path: str):
     for item in data:
         file_path = item["file_path"]
         for chunk in item["chunks"]:
+            if not chunk["text"].strip():
+                logger.warning(f"Пустой чанк в файле {item['file_path']}")
+                continue
             text = chunk["text"]
             metadata = chunk.get("metadata", {})
             document = Document(text=text, metadata={"file_path": file_path, **metadata})
             documents.append(document)
+    logger.info(f"Загружено документов: {len(documents)}")
+    if not documents:
+        raise ValueError("Документы не загружены! Проверьте путь к db.json и его структуру.")
     return documents
 
 def create_ingestion_pipeline():
@@ -54,26 +62,40 @@ def create_ingestion_pipeline():
           api_key=settings.get_llm_key()
     )
     pipeline = IngestionPipeline(
-        transformations=[
-            SentenceSplitter(chunk_size=1024, chunk_overlap=20),
-            ]
+        transformations=[]
         )
     return pipeline
 
-def setup_rag_pipeline(nodes, vector_store):
-    index = VectorStoreIndex(nodes, vector_store=vector_store)
+def setup_rag_pipeline(nodes):
+    index = VectorStoreIndex(nodes)
     query_engine = index.as_query_engine(text_qa_template=qa_prompt)
     return query_engine
 
 async def data_process(documents, pipeline: IngestionPipeline, num_workers=5):
-    nodes = await pipeline.arun(documents, num_workers=num_workers)
+    nodes = [
+        TextNode(
+            text=doc.text,
+            metadata=doc.metadata
+        ) 
+        for doc in documents
+    ]
+    logger.info(f"Сгенерировано узлов (nodes): {len(nodes)}")
+    if not nodes:
+        raise ValueError("Не удалось создать узлы. Проверьте пайплайн обработки.")
     return nodes
 
 async def proccess_questions(query_engine, questions: list) -> list:
     async def process_question(question):
         try:
+            logger.info(f"Запрос: {question}")
             response = await query_engine.aquery(question)
+            logger.info(f"{response}")
+            logger.info(f"Найдено чанков: {len(response.source_nodes)}")
+            logger.debug(f"Топ-1 чанк: {response.source_nodes[0].node.text[:200]}...")
             retrieved_chunks = [node.node.text for node in response.source_nodes]
+            logger.debug(f"Запрос: {question}")
+            logger.debug(f"Найдено чанков: {len(response.source_nodes)}")
+            logger.debug(f"Топ-1 чанк: {response.source_nodes[0].node.text[:200]}...")
 
             if not retrieved_chunks:
                 answer = "Не могу найти информацию по этому вопросу."
@@ -88,7 +110,7 @@ async def proccess_questions(query_engine, questions: list) -> list:
         except Exception as e:
             return {
                 "question": question,
-                "answer": "Вопрос выходит за пределы базы знаний.",
+                "answer": "The question is outside the knowledge base.",
                 "retrieved_chunks": []
             }
 

@@ -7,13 +7,13 @@ import asyncio
 async def main():
     questions, ground_truth = load_questions("questions.xlsx")
     
-    vector_store = setup_qdrant("cache/embedding", "rag_cache")
+    # vector_store = setup_qdrant("cache/embedding", "rag_cache")
     documents = load_json_db("rag_app/data/db.json")
     pipeline = create_ingestion_pipeline()
 
     nodes = await data_process(documents=documents, pipeline=pipeline)
 
-    query_engine = setup_rag_pipeline(nodes, vector_store)
+    query_engine = setup_rag_pipeline(nodes)
 
     responses = await proccess_questions(query_engine, questions)
 
